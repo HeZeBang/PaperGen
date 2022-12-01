@@ -3,9 +3,9 @@ An simple html paper generator for zujuan
 
 ## Usage
 
-*Note: *
+**Note: **
 
-The headers apis are come from mobile app, while the SMS login module is on the schedule.
+- The headers apis are come from mobile app, and the SMS login module is available.
 
 > xkarticle.py
 
