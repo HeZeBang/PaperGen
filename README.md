@@ -3,11 +3,10 @@ An simple html paper generator for zujuan
 
 ## Usage
 
-**Note: **
+> Note
+> - The headers apis are come from mobile app, and the SMS login module is available.
 
-- The headers apis are come from mobile app, and the SMS login module is available.
-
-> xkarticle.py
+### xkarticle.py
 
 To get articles from the website.
 
@@ -16,16 +15,15 @@ For example:
 To get article from `https://*.*/11pt3205ct8749n230250.html`
 
 Input:
-- SubjectId: 11
-- ArticleId: 3205/230250
+- Url: ...
 
-> paper-gen.py
+### paper-gen.py
 
 To generate paper from the article or basket.
 
 The question search ability is based on Baidu. *(While the accuracy is so bad)*
 
-> xkpaper.py
+### xkpaper.py
 
 The same as ppg.py.
 
