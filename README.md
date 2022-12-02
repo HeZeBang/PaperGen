@@ -1,9 +1,12 @@
 # PaperGen
+
+一个简单的试卷生成器
 An simple html paper generator for zujuan
 
-## Usage
+## 使用方法/Usage
 
-> Note
+> 注意/Note
+> - 请求头和api来自移动端app，现已支持短信登录，可去除水印（较慢）
 > - The headers apis are come from mobile app, and the SMS login module is available.
 
 ### xkarticle.py
