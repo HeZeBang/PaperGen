@@ -1,12 +1,18 @@
+from io import BytesIO
 import json
+import os
+import sys
 import time
 import requests
 import uuid
 import urllib.parse
 import re
 import hashlib
+import base64
+from itertools import product
+from PIL import Image
 
-__version__ = '1.0'
+__version__ = '2.0'
 __author__  = 'ZAMBAR'
 __debugMode__ = True
 jsonpth = './test.json'
@@ -41,7 +47,7 @@ def authInit():
 	return apih
 	
 
-def anlyRes(arg, subid):
+def anlyRes(arg, subid, apih):
 	if(arg):
 		pattern = re.compile(r'[0-9]+')
 		res = pattern.findall(arg)
@@ -130,7 +136,7 @@ def output(name, otp):
 	with open(r'./output/' + name + '.html', 'w', encoding = 'utf-8') as f:
 		f.write(otp)
 
-def ansGen(isId, title, list):
+def ansGen(isId, title, list, apih):
 	if not isId:
 		srcapi = 'https://graph.baidu.com/s?sign=00000000000000000000000000000000&f=question&more_question=0&extUiData[mode]=text&extUiData[query]='
 		idx = 0
@@ -153,15 +159,50 @@ def ansGen(isId, title, list):
 		srcapi='https://zjappserver.xkw.com/app-server/v1/ques/detail/11/{}?browserWidth=800'
 		idx = 0
 		otp = '<h1>{}–答案部分</h1>'.format(title)
+		alone = input("是否将图片嵌入网页？(standalone)[注意文件可能过大] y/N") == "y"
+		demark = input("是否去除水印？[时间较长] y/N") == "y"
 		for item in list:
 			idx=idx+1
 			print ('请求{}题答案'.format(idx))
-			result = json.loads(requests.get(url=srcapi.format(item), headers=apih).text)
-			print (result['msg'] if result.get("data",{}).get("answerImg") else "答案为空")
+			if(os.path.exists("./output/resources/{}answer.png".format(item))):
+				answerImg = "./resources/" + str(item) +  "answer.png"
+				parseImg = "./resources/" + str(item) + "parse.png"
+				print("答案已存在")
+			else:
+				result = json.loads(requests.get(url=srcapi.format(item), headers=apih).text)
+				answerImg = result.get("data",{}).get("answerImg")
+				parseImg = result.get("data",{}).get("parseImg")
+				print (result['msg'] if answerImg else "答案为空")
+				heads={"Accept":"image/png","User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0"}
+
+				if(alone and answerImg and parseImg):
+					print("正在嵌入图片")
+					answerImg = "data:image/png;base64," + base64.b64encode(requests.get(answerImg, headers=heads).content).decode()
+					parseImg = "data:image/png;base64," + base64.b64encode(requests.get(parseImg, headers=heads).content).decode()
+				else:
+					print("正在保存答案")
+					img = Image.open(BytesIO(requests.get(answerImg, headers=heads).content))
+					if(demark):
+						width, height = img.size
+						for pos in product(range(width), range(height)):
+							if sum(img.getpixel(pos)[:3]) > 600:
+								img.putpixel(pos, (255,255,255))
+					answerImg = "./resources/" + str(item) +  "answer.png"
+					img.save(answerImg.replace("./","./output/"))
+					print("正在保存解析")
+					img = Image.open(BytesIO(requests.get(parseImg, headers=heads).content))
+					if(demark):
+						width, height = img.size
+						for pos in product(range(width), range(height)):
+							if sum(img.getpixel(pos)[:3]) > 600:
+								img.putpixel(pos, (255,255,255))
+					parseImg = "./resources/" + str(item) + "parse.png"
+					img.save(parseImg.replace("./","./output/"))
+				print("完成")
 			otp = otp + '''<h2>第{}题</h2>
 	<img style="width: 100%; margin: 0mm" src="{}"/>
 	<img style="width: 100%; margin: 0mm" src="{}"/>
-	'''.format(idx, result.get("data",{}).get("answerImg"), result.get("data",{}).get("parseImg"))
+	'''.format(idx, answerImg, parseImg)
 
 		with open('./output/' + title + ('_答案版' if idx else '') +'.html','w', encoding = 'utf-8') as f:
 			f.write(otp)
@@ -201,6 +242,10 @@ def login(phnum, code, isSMS):
 
 
 def main():
+	if(not os.path.exists("./output")):
+		os.mkdir("./output")
+	if(not os.path.exists("./output/resources")):
+		os.mkdir("./output/resources")
 	sbj = re.compile(r'"id":(.*?),"name":"(.*?),').findall(requests.get('https://zjappserver.xkw.com/app-server/v1/basicData/subjects').text)
 	print(sbj)
 	if(input("重新登录账户？ y/N")=="y"):
@@ -213,13 +258,13 @@ def main():
 		debug(hds)
 		with open('auth.ini', 'w') as f:
 			f.write(json.dumps(hds))
-	authInit()
-	ret = fetchList(anlyRes(input('输入链接/试题id获取试题，留空从试题篮获取 '), input('输入学科id ')))
+	head = authInit()
+	ret = fetchList(anlyRes(input('输入链接/试题id获取试题，留空从试题篮获取 '), input('输入学科id ') or "11", head))
 	debug(ret)
 	if(input("是否从百度获取答案？ y/N ")=="y"):
-		ansGen(0, ret.get("title"), ret.get("txtlist"))
+		ansGen(0, ret.get("title"), ret.get("txtlist"), head)
 	if(input("是否从主站获取答案？（免费用户30题/日） y/N ")=="y"):
-		ansGen(1, ret.get("title"), ret.get("idlist"))
+		ansGen(1, ret.get("title"), ret.get("idlist"), head)
 
 
 if __name__ == "__main__" :
