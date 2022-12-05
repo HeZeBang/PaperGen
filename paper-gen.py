@@ -12,9 +12,9 @@ import base64
 from itertools import product
 from PIL import Image
 
-__version__ = '2.0'
+__version__ = '2.2'
 __author__  = 'ZAMBAR'
-__debugMode__ = True
+__debugMode__ = False
 jsonpth = './test.json'
 
 id = 11
@@ -25,15 +25,15 @@ otp = ''
 title = ''
 
 def debug(text):
-	if(debug):
+	if(__debugMode__):
 		print(text)
 
 def authInit():
 	try:
 		apih=json.load(open('auth.ini'))
 		res = requests.get('https://zjappserver.xkw.com/app-server/gateway/v1/basic/refreshToken', headers = apih, params = json.dumps({'refreshToken':apih.get('refreshToken')}).replace(' ', '')).json()
-		print (res)
-		print(json.dumps({'refreshToken':apih.get('refreshToken')}))
+		print ("刷新用户状态：" + res["msg"])
+		debug(json.dumps({'refreshToken':apih.get('refreshToken')}))
 		apih['authToken'] = res.get('authToken') or apih['authToken']
 	except:
 		apih={'zjapp-check':
@@ -43,6 +43,7 @@ def authInit():
 	'User-Agent':'okhttp/3.14.9'
 	}
 	debug(apih)
+	debug(requests.get('https://zjappserver.xkw.com/app-server/v1/user/info', headers = apih).json())
 	print ('当前登录用户：{}'.format((requests.get('https://zjappserver.xkw.com/app-server/v1/user/info', headers = apih).json().get('data') or {}).get('username')))
 	return apih
 	
@@ -136,8 +137,8 @@ def output(name, otp):
 	with open(r'./output/' + name + '.html', 'w', encoding = 'utf-8') as f:
 		f.write(otp)
 
-def ansGen(isId, title, list, apih):
-	if not isId:
+def ansGen(isIdList, title, list, apih, alone, demark):
+	if not isIdList:
 		srcapi = 'https://graph.baidu.com/s?sign=00000000000000000000000000000000&f=question&more_question=0&extUiData[mode]=text&extUiData[query]='
 		idx = 0
 		otp = '<h1>{}–答案部分</h1>'.format(title)
@@ -153,14 +154,13 @@ def ansGen(isId, title, list, apih):
 			for i in result:
 				otp = otp + '{}'.format(i.replace('\\',''))
 			print ('已找到{}题答案'.format(idx))
-		with open('./output/' + title + ('_答案版' if idx else '') + '.html','w', encoding = 'utf-8') as f:
+		with open('./output/' + title + ('_baidu答案版' if idx else '') + '.html','w', encoding = 'utf-8') as f:
 			f.write(otp)
 	else:
 		srcapi='https://zjappserver.xkw.com/app-server/v1/ques/detail/11/{}?browserWidth=800'
 		idx = 0
-		otp = '<h1>{}–答案部分</h1>'.format(title)
-		alone = input("是否将图片嵌入网页？(standalone)[注意文件可能过大] y/N") == "y"
-		demark = input("是否去除水印？[时间较长] y/N") == "y"
+		otp = '<!DOCTYPE html><head><title>{0}——答案部分</title></head><b>{0}</b><h1 style="margin: 0mm">答案部分</h1>'.format(title)
+		parse = ''
 		for item in list:
 			idx=idx+1
 			print ('请求{}题答案'.format(idx))
@@ -199,11 +199,10 @@ def ansGen(isId, title, list, apih):
 					parseImg = "./resources/" + str(item) + "parse.png"
 					img.save(parseImg.replace("./","./output/"))
 				print("完成")
-			otp = otp + '''<h2>第{}题</h2>
-	<img style="width: 100%; margin: 0mm" src="{}"/>
-	<img style="width: 100%; margin: 0mm" src="{}"/>
-	'''.format(idx, answerImg, parseImg)
-
+			otp = otp + '''<div><div style="position: absolute; width:100px;">{}.</div><div style="left:100px; margin-left:10px;"><img style="width: 100%; margin: 0mm" src="{}"/></div></div>'''.format(idx, answerImg)
+			parse = parse + '''<h2>第{}题解析</h2><img style="width: 100%; margin: 0mm" src="{}"/><img style="width: 100%; margin: 0mm" src="{}"/>'''.format(idx, answerImg, parseImg)
+			#otp = (otp + '''<h2>第{}题</h2><img style="width: 100%; margin: 0mm" src="{}"/><img style="width: 100%; margin: 0mm" src="{}"/>'''.format(idx, answerImg, parseImg)) if ansFirst else '''{}<img style="width: 100%; margin: 0mm" src="{}"/><h2>第{}题解析</h2><img style="width: 100%; margin: 0mm" src="{}"/>'''
+		otp = otp + parse
 		with open('./output/' + title + ('_答案版' if idx else '') +'.html','w', encoding = 'utf-8') as f:
 			f.write(otp)
 
@@ -246,8 +245,11 @@ def main():
 		os.mkdir("./output")
 	if(not os.path.exists("./output/resources")):
 		os.mkdir("./output/resources")
+
 	sbj = re.compile(r'"id":(.*?),"name":"(.*?),').findall(requests.get('https://zjappserver.xkw.com/app-server/v1/basicData/subjects').text)
 	print(sbj)
+	head = authInit()
+
 	if(input("重新登录账户？ y/N")=="y"):
 		phnum = input("手机号：")
 		if(input("用短信登录吗？ y/N")=="y"):
@@ -258,13 +260,14 @@ def main():
 		debug(hds)
 		with open('auth.ini', 'w') as f:
 			f.write(json.dumps(hds))
-	head = authInit()
+		head = authInit()
+	
 	ret = fetchList(anlyRes(input('输入链接/试题id获取试题，留空从试题篮获取 '), input('输入学科id ') or "11", head))
 	debug(ret)
 	if(input("是否从百度获取答案？ y/N ")=="y"):
-		ansGen(0, ret.get("title"), ret.get("txtlist"), head)
+		ansGen(0, ret.get("title"), ret.get("txtlist"), head, False, False)
 	if(input("是否从主站获取答案？（免费用户30题/日） y/N ")=="y"):
-		ansGen(1, ret.get("title"), ret.get("idlist"), head)
+		ansGen(1, ret.get("title"), ret.get("idlist"), head, input("是否将图片嵌入网页？(standalone)[注意文件可能过大] y/N") == "y", input("是否去除水印？[时间较长] y/N") == "y")
 
 
 if __name__ == "__main__" :
